@@ -22,4 +22,12 @@ bin/ec2_example.sh
 ec2Cluster/
 
 # don't ignore the ec2 config and sh files
+<<<<<<< Updated upstream
 !job-server/config/ec2.sh
+=======
+!job-server/config/ec2.sh
+
+# don't ignore the yarn config and sh files
+!job-server/config/yarn.conf
+!job-server/config/yarn.sh
+>>>>>>> Stashed changes
