@@ -224,7 +224,8 @@ class WebApi(system: ActorSystem,
    *    DELETE /data/<filename>       - deletes given file, no-op if file does not exist
    *    POST /data/<filename-prefix>  - upload a new data file, using the given prefix,
    *                                      a time stamp is appended to ensure uniqueness
-   * @author TimMaltGermany
+    *
+    * @author TimMaltGermany
    */
   def dataRoutes: Route = pathPrefix("data") {
     // user authentication
@@ -267,13 +268,16 @@ class WebApi(system: ActorSystem,
             } else {
               parameterMap { (params) =>
                 val config = ConfigFactory.parseMap(params.asJava).resolve()
-                val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
-                respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                  future.map {
-                    case ContextInitialized   => ctx.complete(StatusCodes.OK)
-                    case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                    case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
-                  }
+
+                if (getJobManagerForContext(Some(contextName),null,null).isDefined){
+                  complete(StatusCodes.BadRequest,errMap("context " + contextName + " exists"))
+                }
+                else {
+                  supervisor ! AddContext(contextName, config)
+                  do {
+                    Thread.sleep(1000)
+                  } while (getJobManagerForContext(Some(contextName), null, null).isEmpty)
+                  complete(StatusCodes.OK)
                 }
               }
             }
@@ -435,7 +439,8 @@ class WebApi(system: ActorSystem,
          * [
          *   {jobId: "word-count-2013-04-22", status: "RUNNING"}
          * ]
-         * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
+          *
+          * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
          */
         get {
           parameters('limit.as[Int] ?) { (limitOpt) =>
