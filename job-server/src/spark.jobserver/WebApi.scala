@@ -267,13 +267,18 @@ class WebApi(system: ActorSystem,
             } else {
               parameterMap { (params) =>
                 val config = ConfigFactory.parseMap(params.asJava).resolve()
-                val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
-                respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                  future.map {
-                    case ContextInitialized   => ctx.complete(StatusCodes.OK)
-                    case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                    case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
-                  }
+
+                if (getJobManagerForContext(Some(contextName),null,null).isDefined){
+                  complete(StatusCodes.BadRequest,errMap("context " + contextName + " exists"))
+                }
+                else {
+                  supervisor ! AddContext(contextName, config)
+                  do {
+                    logger.info("Sending message ")
+                    Thread.sleep(1000)
+                  } while (getJobManagerForContext(Some(contextName), null, null).isEmpty)
+                  logger.info("Received confirmation")
+                  complete(StatusCodes.OK)
                 }
               }
             }
