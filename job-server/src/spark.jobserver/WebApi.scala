@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import java.util.NoSuchElementException
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{TimeUnit, TimeoutException}
 import javax.net.ssl.SSLContext
 
 import akka.actor.{ActorRef, ActorSystem}
@@ -267,18 +267,32 @@ class WebApi(system: ActorSystem,
             } else {
               parameterMap { (params) =>
                 val config = ConfigFactory.parseMap(params.asJava).resolve()
+                respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                  try {
+                    val future = (supervisor ? AddContext(contextName, config)) (20000)
+                    Await.result(future, new FiniteDuration(20L, SECONDS)) match {
+                      case ContextInitialized => ctx.complete(StatusCodes.OK)
+                      case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
+                      case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
+                    }
+                  } catch {
+                    case ex: TimeoutException => {
+                      var retries = 60;
+                      do {
+                        Thread.sleep(1000)
+                        retries -= 1
+                      }
+                      while ((getJobManagerForContext(Some(contextName), null, null).isEmpty) && retries > 0)
 
-                if (getJobManagerForContext(Some(contextName),null,null).isDefined){
-                  complete(StatusCodes.BadRequest,errMap("context " + contextName + " exists"))
-                }
-                else {
-                  supervisor ! AddContext(contextName, config)
-                  do {
-                    logger.info("Sending message ")
-                    Thread.sleep(1000)
-                  } while (getJobManagerForContext(Some(contextName), null, null).isEmpty)
-                  logger.info("Received confirmation")
-                  complete(StatusCodes.OK)
+                      if (retries > 1)
+                      {
+                        ctx.complete(StatusCodes.OK)
+                      }
+                      else {
+                        badRequest(ctx, "context not created")
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -293,7 +307,7 @@ class WebApi(system: ActorSystem,
             respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK)
-                case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
+                case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
               }
             }
           }
