@@ -29,12 +29,14 @@ MAIN="spark.jobserver.JobManager"
 
 if [ ! -z $3 ]; then
   cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
+  --driver-class-path $appdir/spark-job-server.jar
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
   --proxy-user $3
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
   $appdir/spark-job-server.jar $1 $2 $conffile'
 else
   cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
+  --driver-class-path $appdir/spark-job-server.jar
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
   $appdir/spark-job-server.jar $1 $2 $conffile'
